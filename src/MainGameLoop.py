@@ -45,6 +45,7 @@ def main():
                     grid.update_grid(figure)
                     score += grid.delete_row()
                     figure = Tetrominoe(random.choice(tetrominoes))
+                    print(grid._count_gaps())
                     if not figure.valid(figure.row, figure.column, grid.grid):
                         run = False
             # Check for the SPEEDUP event which increases the speed and the level
