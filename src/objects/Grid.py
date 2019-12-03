@@ -1,73 +1,89 @@
 from dataclasses import dataclass
-from src.Constants import ROWS, COLUMNS
+from src.Constants import ROWS, COLUMNS, colors
 import cv2
 import numpy as np
+import random
+from PIL import Image
+from src.Constants import tetrominoes
+from src.objects.Tetromino import Tetrominoe
 
 
 class Grid:
-    ACTION_SPACE_SIZE: int = 5
-    grid: list = [0] * COLUMNS * ROWS
 
     def __init__(self):
         self.OBSERVATION_SPACE_VALUES = (ROWS, COLUMNS, 3)
+        self.ACTION_SPACE_SIZE = 6
+        self.grid = np.zeros((ROWS, COLUMNS))
 
     def reset(self):
-        self.grid = [0] * COLUMNS * ROWS
+        self.grid = np.zeros((ROWS, COLUMNS))
 
-    def update_grid(self, figure):
-        for index, color in enumerate(figure.tet):
-            if color > 0:
-                row = figure.row + index // 4
-                column = figure.column + index % 4
-                self.grid[row * COLUMNS + column] = color
+    def place_tetromino_in_grid(self, figure):
+        for row, column, color in figure.grid_coord_color():
+            self.grid[row][column] = color
 
     def delete_row(self):
         rows = 0
-        for row in range(ROWS):
-            for column in range(COLUMNS):
-                if self.grid[row * COLUMNS + column] == 0:
+        for index, row in enumerate(self.grid):
+            for column in row:
+                if column == 0:
                     break
             else:
-                del self.grid[row * COLUMNS:row * COLUMNS + COLUMNS]
-                self.grid[0:0] = [0] * COLUMNS
+                self.grid = np.concatenate((np.zeros((1, 10)), np.delete(self.grid, index, axis=0)))
                 rows += 1
         return rows ** 2 * 100
 
-    def step(self, action, figure):
-        figure.actions(action, self.grid)
-        return 1, np.array(figure.get_image(self.grid))
+    def get_image(self, figure):
+        img = np.zeros((ROWS, COLUMNS, 3), dtype=np.uint8)
+        for index_row, row in enumerate(self.grid):
+            for index_column, color in enumerate(row):
+                if color > 0:
+                    img[index_row][index_column] = colors.get(color)
+        for row, column, color in figure.grid_coord_color():
+            img[row][column] = colors.get(color)
+        img = Image.fromarray(img, 'RGB')
+        return img
 
     def render(self, figure):
-        img = figure.get_image(self.grid)
+        img = self.get_image(figure)
         img = img.resize((200, 400))  # resizing so we can see our agent in all its glory.
         cv2.imshow("image", np.array(img))  # show it!
         cv2.waitKey(1)
 
     def _count_gaps(self):
-        gap_count = 0
+        gaps = 0
+        zeros = self.grid == 0
+        for row in range(0, 10):
+            start_counting = False
+            for column in range(0, 20):
+                if not zeros[column][row]:
+                    start_counting = True
+                if start_counting and zeros[column][row]:
+                    gaps += 1
+        return gaps
+
+    def _count_heights(self):
         heights = []
-        array = np.array(self.grid.copy()).reshape((20, 10))
-        for index, row in enumerate(array):
-            for index_2, column in enumerate(row):
-                if column > 0:
-                    while not index + 1 > len(array) - 1:
-                        if array[index + 1][index_2] == 0:
-                            gap_count += 1
-                        index += 1
-        for index, column in enumerate(array[19]):
-            height = 0
-            if column > 0:
-                for index_2 in reversed(range(0, 20)):
-                    if array[index_2][index] > 0:
-                        height += 1
-            heights.append(height)
+        zeros = self.grid == 0
+        for row in range(0, 10):
+            for column in range(0, 20):
+                if not zeros[column][row]:
+                    heights.append(ROWS - column)
+                    break
+        return np.array(heights)
 
-        return gap_count, heights
-
-    def calc_reward(self):
-        gaps, height = self._count_gaps()
-        height = np.array(height)
-        highest = height[height.argmax()]
-        avg = np.average(height)
-        return gaps + highest + avg
-
+    def update(self, figure, done, train_score=False):
+        score = 0
+        if not figure.update(1, 0, self.grid):
+            self.place_tetromino_in_grid(figure)
+            score += self.delete_row()
+            figure = Tetrominoe(random.choice(tetrominoes))
+            if train_score:
+                heights = self._count_heights()
+                min_h, max_h, avg_h = np.argmax(heights), np.argmin(heights), np.average(heights)
+                diff_h = abs(max_h) - abs(min_h)
+                if max_h >= 10 or avg_h > 6 or diff_h > 3:
+                    score -= min_h + max_h + min_h + 2*avg_h + diff_h + (self._count_gaps() ** 2)
+            if not figure.valid(figure.row, figure.column, self.grid):
+                done = True
+        return score, figure, done
