@@ -3,16 +3,9 @@ import random
 from src.objects.Tetromino import Tetrominoe
 from src.objects.Grid import Grid
 from src.Constants import HEIGHT, WIDTH, COLUMNS, DISTANCE, colors, SPEEDUP, TETROMINODOWM
-
+from src.Constants import tetrominoes
 
 speed = 500
-tetrominoes = [[0, 1, 1, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-               [0, 0, 0, 0, 3, 3, 3, 3, 0, 0, 0, 0, 0, 0, 0, 0],
-               [0, 0, 0, 0, 5, 5, 5, 0, 0, 0, 5, 0, 0, 0, 0, 0],
-               [0, 0, 7, 0, 7, 7, 7, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-               [0, 2, 2, 0, 2, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-               [4, 4, 0, 0, 0, 4, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-               [0, 0, 0, 0, 6, 6, 6, 0, 0, 6, 0, 0, 0, 0, 0, 0]]
 
 
 def main():
@@ -25,29 +18,23 @@ def main():
     clock = pg.time.Clock()
 
     # Game variables initialisation
-    score, level, run = 0, 0, True
+    score, level, done = 0, 0, False
     grid = Grid()
 
     # Create first Tetrominoe
     figure = Tetrominoe(random.choice(tetrominoes))
 
     # Main Game loop
-    while run:
+    while not done:
         clock.tick(60)
         # Get the Pygame Events and make the corresponding actions
         for event in pg.event.get():
             # Check for the quit event
             if event.type == pg.QUIT:
-                run = False
+                done = True
             # Check for the TETROMINODOWM event and update the grid and if needed the score and spawn a new one
             if event.type == TETROMINODOWM:
-                if not figure.update(1, 0, grid.grid):
-                    grid.update_grid(figure)
-                    score += grid.delete_row()
-                    figure = Tetrominoe(random.choice(tetrominoes))
-                    print(grid._count_gaps())
-                    if not figure.valid(figure.row, figure.column, grid.grid):
-                        run = False
+                score, figure, done = grid.update(figure, done)
             # Check for the SPEEDUP event which increases the speed and the level
             if event.type == SPEEDUP:
                 pg.time.set_timer(TETROMINODOWM, int(speed*0.8))
@@ -62,16 +49,20 @@ def main():
                     figure.update(1, 0, grid.grid)
                 if event.key == pg.K_LCTRL:
                     figure.rotate(grid.grid)
+                if event.key == pg.K_SPACE:
+                    figure.hard_drop(grid.grid)
+                    score, figure, done = grid.update(figure, done)
         # Fill the screen with Black to reset him
         screen.fill((0, 0, 0))
         # Render the Tetromino
         figure.show(screen)
         # Render the placed Tetrominos
-        for index, color in enumerate(grid.grid):
-            if color > 0:
-                x = index % COLUMNS * DISTANCE
-                y = index // COLUMNS * DISTANCE
-                pg.draw.rect(screen, colors.get(color), (x, y, DISTANCE, DISTANCE))
+        for index_y, row in enumerate(grid.grid):
+            for index_x, column in enumerate(row):
+                if column > 0:
+                    x = index_x * DISTANCE
+                    y = index_y * DISTANCE
+                    pg.draw.rect(screen, colors.get(column), (x, y, DISTANCE, DISTANCE))
         # Render Level and Score
         text_surface = pg.font.SysFont('impact', 40).render(f'{score:,}', False, (255, 255, 255))
         screen.blit(text_surface, (WIDTH // 2 - text_surface.get_width() // 2, 5))

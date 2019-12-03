@@ -16,7 +16,6 @@ from src.objects.Grid import Grid
 import time
 import cv2
 
-
 # For stats
 ep_rewards = [-200]
 epsilon = 1  # not a constant, going to be decayed
@@ -52,7 +51,8 @@ class DQNAgent:
     def create_model(self):
         model = Sequential()
 
-        model.add(Conv2D(256, (3, 3), input_shape=env.OBSERVATION_SPACE_VALUES))  # OBSERVATION_SPACE_VALUES = (10, 10, 3) a 10x10 RGB image.
+        model.add(Conv2D(256, (3, 3),
+                         input_shape=env.OBSERVATION_SPACE_VALUES))  # OBSERVATION_SPACE_VALUES = (10, 10, 3) a 10x10 RGB image.
         model.add(Activation('relu'))
         model.add(MaxPooling2D(pool_size=(2, 2)))
         model.add(Dropout(0.2))
@@ -85,12 +85,12 @@ class DQNAgent:
         minibatch = random.sample(self.replay_memory, MINIBATCH_SIZE)
 
         # Get current states from minibatch, then query NN model for Q values
-        current_states = np.array([transition[0] for transition in minibatch])/255
+        current_states = np.array([transition[0] for transition in minibatch]) / 255
         current_qs_list = self.model.predict(current_states)
 
         # Get future states from minibatch, then query NN model for Q values
         # When using target network, query it, otherwise main network should be queried
-        new_current_states = np.array([transition[3] for transition in minibatch])/255
+        new_current_states = np.array([transition[3] for transition in minibatch]) / 255
         future_qs_list = self.target_model.predict(new_current_states)
 
         X = []
@@ -116,7 +116,8 @@ class DQNAgent:
             y.append(current_qs)
 
         # Fit on all samples as one batch, log only on terminal state
-        self.model.fit(np.array(X)/255, np.array(y), batch_size=MINIBATCH_SIZE, verbose=0, shuffle=False, callbacks=[self.tensorboard] if terminal_state else None)
+        self.model.fit(np.array(X) / 255, np.array(y), batch_size=MINIBATCH_SIZE, verbose=0, shuffle=False,
+                       callbacks=[self.tensorboard] if terminal_state else None)
 
         # Update target network counter every episode
         if terminal_state:
@@ -129,7 +130,7 @@ class DQNAgent:
 
     # Queries main network for Q values given current observation space (environment state)
     def get_qs(self, state):
-        return self.model.predict(np.array(state).reshape(-1, *state.shape)/255)[0]
+        return self.model.predict(np.array(state).reshape(-1, *state.shape) / 255)[0]
 
 
 agent = DQNAgent()
@@ -151,59 +152,68 @@ for episode in tqdm(range(1, EPISODES + 1), ascii=True, unit='episodes'):
     done = False
     figure = Tetrominoe(random.choice(tetrominoes))
 
-    img = figure.get_image(env.grid)
+    img = env.get_image(figure)
 
     current_state = np.array(img)
 
-    #img = img.resize((200, 400))  # resizing so we can see our agent in all its glory.
-    #cv2.imshow("image", np.array(img))  # show it!
-    #cv2.waitKey(1)
-
     while not done:
-        if not figure.update(1, 0, env.grid):
-            env.update_grid(figure)
-            episode_reward += env.delete_row()
-            episode_reward -= env.calc_reward()
-            figure = Tetrominoe(random.choice(tetrominoes))
-            if not figure.valid(figure.row, figure.column, env.grid):
-                done = True
 
-        # This part stays mostly the same, the change is to query a model for Q values
-        if np.random.random() > epsilon:
-            # Get action from Q table
-            action = np.argmax(agent.get_qs(current_state))
-        else:
-            # Get random action
-            action = np.random.randint(0, env.ACTION_SPACE_SIZE)
+        episode_reward, figure, done = env.update(figure, episode_reward, done)
 
-        reward, new_state = env.step(action, figure)
+        for x in range(1):
 
-        # Transform new continous state to new discrete state and count reward
-        episode_reward += reward
+            reward = 0
 
-        if SHOW_PREVIEW and not episode % AGGREGATE_STATS_EVERY:
-            env.render(figure)
+            # This part stays mostly the same, the change is to query a model for Q values
+            if np.random.random() > epsilon:
+                # Get action from Q table
+                action = np.argmax(agent.get_qs(current_state))
+            else:
+                # Get random action
+                action = np.random.randint(0, env.ACTION_SPACE_SIZE)
 
-        # Every step we update replay memory and train main network
-        agent.update_replay_memory((current_state, action, reward, new_state, done))
-        agent.train(done, step)
+            figure.step(action, env.grid)
+            if action == 5: #Hard Drop update grid and spawn new tetromino
+                score, figure, done = env.update(figure, done, train_score=True)
+                reward += score
 
-        current_state = new_state
-        step += 1
+            new_state = np.array(env.get_image(figure))
+
+            # Transform new continous state to new discrete state and count reward
+            episode_reward += reward
+
+            if SHOW_PREVIEW and not episode % AGGREGATE_STATS_EVERY:
+                print(episode_reward, min(ep_rewards), max(ep_rewards))
+                env.render(figure)
+
+            # Every step we update replay memory and train main network
+            agent.update_replay_memory((current_state, action, reward, new_state, done))
+            agent.train(done, step)
+
+            current_state = new_state
+            step += 1
+
+    if SHOW_PREVIEW and not episode % AGGREGATE_STATS_EVERY:
+        print(episode_reward, min(ep_rewards), max(ep_rewards))
 
     # Append episode reward to a list and log stats (every given number of episodes)
     ep_rewards.append(episode_reward)
     if not episode % AGGREGATE_STATS_EVERY or episode == 1:
-        average_reward = sum(ep_rewards[-AGGREGATE_STATS_EVERY:])/len(ep_rewards[-AGGREGATE_STATS_EVERY:])
+        average_reward = sum(ep_rewards[-AGGREGATE_STATS_EVERY:]) / len(ep_rewards[-AGGREGATE_STATS_EVERY:])
         min_reward = min(ep_rewards[-AGGREGATE_STATS_EVERY:])
         max_reward = max(ep_rewards[-AGGREGATE_STATS_EVERY:])
-        agent.tensorboard.update_stats(reward_avg=average_reward, reward_min=min_reward, reward_max=max_reward, epsilon=epsilon)
+        agent.tensorboard.update_stats(reward_avg=average_reward, reward_min=min_reward, reward_max=max_reward,
+                                       epsilon=epsilon)
 
         # Save model, but only when min reward is greater or equal a set value
         if min_reward >= MIN_REWARD:
-            agent.model.save(f'models/{MODEL_NAME}__{max_reward:_>7.2f}max_{average_reward:_>7.2f}avg_{min_reward:_>7.2f}min__{int(time.time())}.model')
+            agent.model.save(
+                f'models/{MODEL_NAME}__{max_reward:_>7.2f}max_{average_reward:_>7.2f}avg_{min_reward:_>7.2f}min__{int(time.time())}.model')
 
     # Decay epsilon
     if epsilon > MIN_EPSILON:
         epsilon *= EPSILON_DECAY
         epsilon = max(MIN_EPSILON, epsilon)
+
+agent.model.save(
+    f'models/{MODEL_NAME}__{max_reward:_>7.2f}max_{average_reward:_>7.2f}avg_{min_reward:_>7.2f}min__{int(time.time())}.model')
