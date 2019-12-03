@@ -51,6 +51,12 @@ class Tetrominoe:
         while self.update(1, 0, grid):
             pass
 
+    def copy(self):
+        copy = Tetrominoe(self.tetromino)
+        copy.row = self.row
+        copy.column = self.column
+        return copy
+
     def step(self, choice, grid):
         if choice == 0:
             self.update(0, 0, grid)

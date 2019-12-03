@@ -1,6 +1,4 @@
 from collections import deque
-
-from src.MainGameLoop import tetrominoes
 from src.objects.Tetromino import Tetrominoe
 from src.tools import ModifiedTensorBoard
 from keras.models import Sequential
@@ -155,14 +153,16 @@ for episode in tqdm(range(1, EPISODES + 1), ascii=True, unit='episodes'):
     img = env.get_image(figure)
 
     current_state = np.array(img)
+    score = 0
 
     while not done:
 
-        episode_reward, figure, done = env.update(figure, episode_reward, done)
+        score += 10
+
+        reward, figure, done = env.update(figure, done)
+        reward += score
 
         for x in range(1):
-
-            reward = 0
 
             # This part stays mostly the same, the change is to query a model for Q values
             if np.random.random() > epsilon:
@@ -173,8 +173,15 @@ for episode in tqdm(range(1, EPISODES + 1), ascii=True, unit='episodes'):
                 action = np.random.randint(0, env.ACTION_SPACE_SIZE)
 
             figure.step(action, env.grid)
+
+            copy_tetromino = figure.copy()
+            copy_grid = env.grid.copy()
+            copy_tetromino.hard_drop(copy_grid)
+            for row, column, color in copy_tetromino.grid_coord_color():
+                copy_grid[row][column] = color
+            reward += Grid.calc_reward(copy_grid)
             if action == 5: #Hard Drop update grid and spawn new tetromino
-                score, figure, done = env.update(figure, done, train_score=True)
+                score, figure, done = env.update(figure, done)
                 reward += score
 
             new_state = np.array(env.get_image(figure))
@@ -182,9 +189,8 @@ for episode in tqdm(range(1, EPISODES + 1), ascii=True, unit='episodes'):
             # Transform new continous state to new discrete state and count reward
             episode_reward += reward
 
-            if SHOW_PREVIEW and not episode % AGGREGATE_STATS_EVERY:
-                print(episode_reward, min(ep_rewards), max(ep_rewards))
-                env.render(figure)
+            #if SHOW_PREVIEW and not episode % AGGREGATE_STATS_EVERY:
+            env.render(figure)
 
             # Every step we update replay memory and train main network
             agent.update_replay_memory((current_state, action, reward, new_state, done))

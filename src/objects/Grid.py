@@ -1,4 +1,3 @@
-from dataclasses import dataclass
 from src.Constants import ROWS, COLUMNS, colors
 import cv2
 import numpy as np
@@ -10,10 +9,13 @@ from src.objects.Tetromino import Tetrominoe
 
 class Grid:
 
-    def __init__(self):
+    def __init__(self, grid=None):
         self.OBSERVATION_SPACE_VALUES = (ROWS, COLUMNS, 3)
         self.ACTION_SPACE_SIZE = 6
-        self.grid = np.zeros((ROWS, COLUMNS))
+        if grid is not None:
+            self.grid = grid
+        else:
+            self.grid = np.zeros((ROWS, COLUMNS))
 
     def reset(self):
         self.grid = np.zeros((ROWS, COLUMNS))
@@ -29,6 +31,7 @@ class Grid:
                 if column == 0:
                     break
             else:
+                print(f'Delete row: {row}')
                 self.grid = np.concatenate((np.zeros((1, 10)), np.delete(self.grid, index, axis=0)))
                 rows += 1
         return rows ** 2 * 100
@@ -50,9 +53,10 @@ class Grid:
         cv2.imshow("image", np.array(img))  # show it!
         cv2.waitKey(1)
 
-    def _count_gaps(self):
+    @staticmethod
+    def _count_gaps(grid):
         gaps = 0
-        zeros = self.grid == 0
+        zeros = grid == 0
         for row in range(0, 10):
             start_counting = False
             for column in range(0, 20):
@@ -62,28 +66,36 @@ class Grid:
                     gaps += 1
         return gaps
 
-    def _count_heights(self):
+    @staticmethod
+    def _count_heights(grid):
         heights = []
-        zeros = self.grid == 0
+        zeros = grid == 0
         for row in range(0, 10):
             for column in range(0, 20):
                 if not zeros[column][row]:
                     heights.append(ROWS - column)
                     break
-        return np.array(heights)
+        if heights:
+            heights = np.array(heights)
+        else:
+            heights = None
+        return heights
 
-    def update(self, figure, done, train_score=False):
+    @staticmethod
+    def calc_reward(grid):
+        heights = Grid._count_heights(grid)
+        if heights is not None:
+            min_h, max_h, avg_h = np.argmax(heights), np.argmin(heights), np.average(heights)
+            diff_h = abs(max_h) - abs(min_h)
+            return - (min_h + max_h + min_h + 2 * avg_h + diff_h + (Grid._count_gaps(grid) ** 2))
+        return - (Grid._count_gaps(grid) ** 2)
+
+    def update(self, figure, done):
         score = 0
         if not figure.update(1, 0, self.grid):
             self.place_tetromino_in_grid(figure)
             score += self.delete_row()
             figure = Tetrominoe(random.choice(tetrominoes))
-            if train_score:
-                heights = self._count_heights()
-                min_h, max_h, avg_h = np.argmax(heights), np.argmin(heights), np.average(heights)
-                diff_h = abs(max_h) - abs(min_h)
-                if max_h >= 10 or avg_h > 6 or diff_h > 3:
-                    score -= min_h + max_h + min_h + 2*avg_h + diff_h + (self._count_gaps() ** 2)
             if not figure.valid(figure.row, figure.column, self.grid):
                 done = True
         return score, figure, done
