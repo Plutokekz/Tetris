@@ -10,7 +10,7 @@ from src.objects.Tetromino import Tetrominoe
 class Grid:
 
     def __init__(self, grid=None):
-        self.OBSERVATION_SPACE_VALUES = (ROWS, COLUMNS, 3)
+        self.OBSERVATION_SPACE_VALUES = (20, 10)#(ROWS, COLUMNS)
         self.ACTION_SPACE_SIZE = 6
         if grid is not None:
             self.grid = grid
@@ -46,6 +46,12 @@ class Grid:
             img[row][column] = colors.get(color)
         img = Image.fromarray(img, 'RGB')
         return img
+
+    def get_state(self, figure):
+        state = self.grid.copy()
+        for row, column, color in figure.grid_coord_color():
+            state[row][column] = color
+        return state.reshape(1, 200)[0] / 7
 
     def render(self, figure):
         img = self.get_image(figure)
@@ -85,10 +91,16 @@ class Grid:
     def calc_reward(grid):
         heights = Grid._count_heights(grid)
         if heights is not None:
-            min_h, max_h, avg_h = np.argmax(heights), np.argmin(heights), np.average(heights)
-            diff_h = abs(max_h) - abs(min_h)
-            return - (min_h + max_h + min_h + 2 * avg_h + diff_h + (Grid._count_gaps(grid) ** 2))
-        return - (Grid._count_gaps(grid) ** 2)
+            ediff1d = np.ediff1d(heights)
+            reward = np.array([
+                3 * Grid._count_gaps(grid),  # Gap count
+                np.mean(heights),  # Average height
+                np.std(heights),  # Standard deviation of heights
+                (max(heights) - min(heights)),  # Max height diff
+                2 * abs(ediff1d).max() if ediff1d.sum() != 0 else 0  # Max consecutive height diff
+            ])
+            return - reward.sum()
+        return - (Grid._count_gaps(grid) * 3)
 
     def update(self, figure, done):
         score = 0
@@ -96,6 +108,8 @@ class Grid:
             self.place_tetromino_in_grid(figure)
             score += self.delete_row()
             figure = Tetrominoe(random.choice(tetrominoes))
+            score = Grid.calc_reward(self.grid)
             if not figure.valid(figure.row, figure.column, self.grid):
                 done = True
+                score = -300
         return score, figure, done

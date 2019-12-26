@@ -1,7 +1,7 @@
 from collections import deque
 from src.objects.Tetromino import Tetrominoe
 from src.tools import ModifiedTensorBoard
-from keras.models import Sequential
+from keras.models import Sequential, load_model
 from keras.layers import Dense, Dropout, Conv2D, MaxPooling2D, Activation, Flatten
 from keras.optimizers import Adam
 import numpy as np
@@ -28,10 +28,13 @@ tf.set_random_seed(1)
 
 # Agent class
 class DQNAgent:
-    def __init__(self):
+    def __init__(self, model_path=""):
 
         # Main model
-        self.model = self.create_model()
+        if model_path:
+            self.model = load_model(model_path)
+        else:
+            self.model = self.create_model()
 
         # Target network
         self.target_model = self.create_model()
@@ -49,20 +52,16 @@ class DQNAgent:
     def create_model(self):
         model = Sequential()
 
-        model.add(Conv2D(256, (3, 3),
-                         input_shape=env.OBSERVATION_SPACE_VALUES))  # OBSERVATION_SPACE_VALUES = (10, 10, 3) a 10x10 RGB image.
+        model.add(Dense(256, input_shape=(200,)))  # OBSERVATION_SPACE_VALUES = (10, 10, 3) a 10x10 RGB image.
         model.add(Activation('relu'))
-        model.add(MaxPooling2D(pool_size=(2, 2)))
+        #model.add(MaxPooling2D(pool_size=(2, 2)))
         model.add(Dropout(0.2))
-
-        model.add(Conv2D(256, (3, 3)))
+        model.add(Dense(256))
         model.add(Activation('relu'))
-        model.add(MaxPooling2D(pool_size=(2, 2)))
+        #model.add(MaxPooling2D(pool_size=(2, 2)))
         model.add(Dropout(0.2))
-
-        model.add(Flatten())  # this converts our 3D feature maps to 1D feature vectors
+        #model.add(Flatten())  # this converts our 3D feature maps to 1D feature vectors
         model.add(Dense(64))
-
         model.add(Dense(env.ACTION_SPACE_SIZE, activation='linear'))  # ACTION_SPACE_SIZE = how many choices (9)
         model.compile(loss="mse", optimizer=Adam(lr=0.001), metrics=['accuracy'])
         return model
@@ -83,12 +82,12 @@ class DQNAgent:
         minibatch = random.sample(self.replay_memory, MINIBATCH_SIZE)
 
         # Get current states from minibatch, then query NN model for Q values
-        current_states = np.array([transition[0] for transition in minibatch]) / 255
+        current_states = np.array([transition[0] for transition in minibatch])
         current_qs_list = self.model.predict(current_states)
 
         # Get future states from minibatch, then query NN model for Q values
         # When using target network, query it, otherwise main network should be queried
-        new_current_states = np.array([transition[3] for transition in minibatch]) / 255
+        new_current_states = np.array([transition[3] for transition in minibatch])
         future_qs_list = self.target_model.predict(new_current_states)
 
         X = []
@@ -109,12 +108,13 @@ class DQNAgent:
             current_qs = current_qs_list[index]
             current_qs[action] = new_q
 
+
             # And append to our training data
             X.append(current_state)
             y.append(current_qs)
 
         # Fit on all samples as one batch, log only on terminal state
-        self.model.fit(np.array(X) / 255, np.array(y), batch_size=MINIBATCH_SIZE, verbose=0, shuffle=False,
+        self.model.fit(np.array(X), np.array(y), batch_size=MINIBATCH_SIZE, verbose=0, shuffle=False,
                        callbacks=[self.tensorboard] if terminal_state else None)
 
         # Update target network counter every episode
@@ -128,10 +128,10 @@ class DQNAgent:
 
     # Queries main network for Q values given current observation space (environment state)
     def get_qs(self, state):
-        return self.model.predict(np.array(state).reshape(-1, *state.shape) / 255)[0]
+        return self.model.predict(state.reshape(-1, *state.shape))[0]
 
 
-agent = DQNAgent()
+agent = DQNAgent(model_path="models/20x10__-726.30max_-1905.51avg_-3443.95min__1577363709.model")
 
 # Iterate over episodes
 for episode in tqdm(range(1, EPISODES + 1), ascii=True, unit='episodes'):
@@ -150,57 +150,51 @@ for episode in tqdm(range(1, EPISODES + 1), ascii=True, unit='episodes'):
     done = False
     figure = Tetrominoe(random.choice(tetrominoes))
 
-    img = env.get_image(figure)
-
-    current_state = np.array(img)
-    score = 0
+    current_state = env.get_state(figure)
 
     while not done:
 
-        score += 10
-
         reward, figure, done = env.update(figure, done)
-        reward += score
 
-        for x in range(1):
 
-            # This part stays mostly the same, the change is to query a model for Q values
-            if np.random.random() > epsilon:
-                # Get action from Q table
-                action = np.argmax(agent.get_qs(current_state))
-            else:
-                # Get random action
-                action = np.random.randint(0, env.ACTION_SPACE_SIZE)
+        # This part stays mostly the same, the change is to query a model for Q values
+        if np.random.random() > epsilon:
+            # Get action from Q table
+            action = np.argmax(agent.get_qs(current_state))
+        else:
+            # Get random action
+            action = np.random.randint(0, env.ACTION_SPACE_SIZE)
 
-            figure.step(action, env.grid)
+        figure.step(action, env.grid)
 
-            copy_tetromino = figure.copy()
-            copy_grid = env.grid.copy()
-            copy_tetromino.hard_drop(copy_grid)
-            for row, column, color in copy_tetromino.grid_coord_color():
-                copy_grid[row][column] = color
-            reward += Grid.calc_reward(copy_grid)
-            if action == 5: #Hard Drop update grid and spawn new tetromino
-                score, figure, done = env.update(figure, done)
-                reward += score
+        #copy_tetromino = figure.copy()
+        #copy_grid = env.grid.copy()
+        #copy_tetromino.hard_drop(copy_grid)
+        #for row, column, color in copy_tetromino.grid_coord_color():
+        #    copy_grid[row][column] = color
+        #reward += Grid.calc_reward(copy_grid)
 
-            new_state = np.array(env.get_image(figure))
+        new_state = env.get_state(figure)
 
-            # Transform new continous state to new discrete state and count reward
-            episode_reward += reward
+        if action == 5: #Hard Drop update grid and spawn new tetromino
+            score, figure, done = env.update(figure, done)
+            reward += score
 
-            #if SHOW_PREVIEW and not episode % AGGREGATE_STATS_EVERY:
+        # Transform new continous state to new discrete state and count reward
+        episode_reward += reward
+
+        if SHOW_PREVIEW and not episode % AGGREGATE_STATS_EVERY:
             env.render(figure)
 
-            # Every step we update replay memory and train main network
-            agent.update_replay_memory((current_state, action, reward, new_state, done))
-            agent.train(done, step)
+        # Every step we update replay memory and train main network
+        agent.update_replay_memory((current_state, action, reward, new_state, done))
+        agent.train(done, step)
 
-            current_state = new_state
-            step += 1
+        current_state = new_state
+        step += 1
 
     if SHOW_PREVIEW and not episode % AGGREGATE_STATS_EVERY:
-        print(episode_reward, min(ep_rewards), max(ep_rewards))
+        print(f"\rEpisode reward: {episode_reward:0.2f}, Min ep reward: {min(ep_rewards):0.2f}, Max op reward: {max(ep_rewards):0.2f}:")
 
     # Append episode reward to a list and log stats (every given number of episodes)
     ep_rewards.append(episode_reward)
@@ -215,6 +209,12 @@ for episode in tqdm(range(1, EPISODES + 1), ascii=True, unit='episodes'):
         if min_reward >= MIN_REWARD:
             agent.model.save(
                 f'models/{MODEL_NAME}__{max_reward:_>7.2f}max_{average_reward:_>7.2f}avg_{min_reward:_>7.2f}min__{int(time.time())}.model')
+    if episode % 1000 == 0:
+        average_reward = sum(ep_rewards[-AGGREGATE_STATS_EVERY:]) / len(ep_rewards[-AGGREGATE_STATS_EVERY:])
+        min_reward = min(ep_rewards[-AGGREGATE_STATS_EVERY:])
+        max_reward = max(ep_rewards[-AGGREGATE_STATS_EVERY:])
+        agent.model.save(
+            f'models/{MODEL_NAME}__{max_reward:_>7.2f}max_{average_reward:_>7.2f}avg_{min_reward:_>7.2f}min__{int(time.time())}.model')
 
     # Decay epsilon
     if epsilon > MIN_EPSILON:

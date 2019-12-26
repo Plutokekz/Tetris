@@ -34,7 +34,8 @@ def main():
                 done = True
             # Check for the TETROMINODOWM event and update the grid and if needed the score and spawn a new one
             if event.type == TETROMINODOWM:
-                score, figure, done = grid.update(figure, done)
+                points, figure, done = grid.update(figure, done)
+                score += points
             # Check for the SPEEDUP event which increases the speed and the level
             if event.type == SPEEDUP:
                 pg.time.set_timer(TETROMINODOWM, int(speed*0.8))
@@ -51,7 +52,8 @@ def main():
                     figure.rotate(grid.grid)
                 if event.key == pg.K_SPACE:
                     figure.hard_drop(grid.grid)
-                    score, figure, done = grid.update(figure, done)
+                    points, figure, done = grid.update(figure, done)
+                    score += points
         # Fill the screen with Black to reset him
         screen.fill((0, 0, 0))
         # Render the Tetromino
