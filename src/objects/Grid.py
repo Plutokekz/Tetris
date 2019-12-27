@@ -1,5 +1,5 @@
 from src.Constants import ROWS, COLUMNS, colors
-import cv2
+import time
 import numpy as np
 import random
 from PIL import Image
@@ -31,7 +31,7 @@ class Grid:
                 if column == 0:
                     break
             else:
-                print(f'Delete row: {row}')
+                print(f'\rDelete row: {row}')
                 self.grid = np.concatenate((np.zeros((1, 10)), np.delete(self.grid, index, axis=0)))
                 rows += 1
         return rows ** 2 * 100
@@ -56,8 +56,10 @@ class Grid:
     def render(self, figure):
         img = self.get_image(figure)
         img = img.resize((200, 400))  # resizing so we can see our agent in all its glory.
-        cv2.imshow("image", np.array(img))  # show it!
-        cv2.waitKey(1)
+        return img
+
+        #cv2.imshow("image", np.array(img))  # show it!
+        #cv2.waitKey(1)
 
     @staticmethod
     def _count_gaps(grid):

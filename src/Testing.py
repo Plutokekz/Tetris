@@ -51,18 +51,14 @@ class DQNAgent:
 
     def create_model(self):
         model = Sequential()
-
-        model.add(Dense(256, input_shape=(200,)))  # OBSERVATION_SPACE_VALUES = (10, 10, 3) a 10x10 RGB image.
+        model.add(Dense(200, input_shape=(200,)))
         model.add(Activation('relu'))
-        #model.add(MaxPooling2D(pool_size=(2, 2)))
         model.add(Dropout(0.2))
-        model.add(Dense(256))
+        model.add(Dense(200))
         model.add(Activation('relu'))
-        #model.add(MaxPooling2D(pool_size=(2, 2)))
         model.add(Dropout(0.2))
-        #model.add(Flatten())  # this converts our 3D feature maps to 1D feature vectors
-        model.add(Dense(64))
-        model.add(Dense(env.ACTION_SPACE_SIZE, activation='linear'))  # ACTION_SPACE_SIZE = how many choices (9)
+        model.add(Dense(50))
+        model.add(Dense(env.ACTION_SPACE_SIZE, activation='linear'))
         model.compile(loss="mse", optimizer=Adam(lr=0.001), metrics=['accuracy'])
         return model
 
@@ -108,7 +104,6 @@ class DQNAgent:
             current_qs = current_qs_list[index]
             current_qs[action] = new_q
 
-
             # And append to our training data
             X.append(current_state)
             y.append(current_qs)
@@ -131,7 +126,10 @@ class DQNAgent:
         return self.model.predict(state.reshape(-1, *state.shape))[0]
 
 
-agent = DQNAgent(model_path="models/20x10__-726.30max_-1905.51avg_-3443.95min__1577363709.model")
+with open("name.txt", "r") as file:
+    name = file.read()
+agent = DQNAgent(model_path=f"models/{str(name)}.model")
+print(f"Loaded model: {name}")
 
 # Iterate over episodes
 for episode in tqdm(range(1, EPISODES + 1), ascii=True, unit='episodes'):
@@ -156,7 +154,6 @@ for episode in tqdm(range(1, EPISODES + 1), ascii=True, unit='episodes'):
 
         reward, figure, done = env.update(figure, done)
 
-
         # This part stays mostly the same, the change is to query a model for Q values
         if np.random.random() > epsilon:
             # Get action from Q table
@@ -167,24 +164,17 @@ for episode in tqdm(range(1, EPISODES + 1), ascii=True, unit='episodes'):
 
         figure.step(action, env.grid)
 
-        #copy_tetromino = figure.copy()
-        #copy_grid = env.grid.copy()
-        #copy_tetromino.hard_drop(copy_grid)
-        #for row, column, color in copy_tetromino.grid_coord_color():
-        #    copy_grid[row][column] = color
-        #reward += Grid.calc_reward(copy_grid)
-
         new_state = env.get_state(figure)
 
-        if action == 5: #Hard Drop update grid and spawn new tetromino
+        if action == 5:  # Hard Drop update grid and spawn new tetromino
             score, figure, done = env.update(figure, done)
             reward += score
 
         # Transform new continous state to new discrete state and count reward
         episode_reward += reward
 
-        if SHOW_PREVIEW and not episode % AGGREGATE_STATS_EVERY:
-            env.render(figure)
+        #if SHOW_PREVIEW and not episode % AGGREGATE_STATS_EVERY:
+        #    env.render(figure)
 
         # Every step we update replay memory and train main network
         agent.update_replay_memory((current_state, action, reward, new_state, done))
@@ -194,7 +184,10 @@ for episode in tqdm(range(1, EPISODES + 1), ascii=True, unit='episodes'):
         step += 1
 
     if SHOW_PREVIEW and not episode % AGGREGATE_STATS_EVERY:
-        print(f"\rEpisode reward: {episode_reward:0.2f}, Min ep reward: {min(ep_rewards):0.2f}, Max op reward: {max(ep_rewards):0.2f}:")
+        img = env.render(figure)
+        img.save(f"pictures/tetris_reward_{episode_reward}_{time.time()}.png", "png")
+        print(f"\rCurrentEpisodeReward: {episode_reward:0.2f}, MinEpReward: {min(ep_rewards):0.2f}, MaxEpReward: "
+              f"{max(ep_rewards):0.2f}:")
 
     # Append episode reward to a list and log stats (every given number of episodes)
     ep_rewards.append(episode_reward)
@@ -213,8 +206,10 @@ for episode in tqdm(range(1, EPISODES + 1), ascii=True, unit='episodes'):
         average_reward = sum(ep_rewards[-AGGREGATE_STATS_EVERY:]) / len(ep_rewards[-AGGREGATE_STATS_EVERY:])
         min_reward = min(ep_rewards[-AGGREGATE_STATS_EVERY:])
         max_reward = max(ep_rewards[-AGGREGATE_STATS_EVERY:])
-        agent.model.save(
-            f'models/{MODEL_NAME}__{max_reward:_>7.2f}max_{average_reward:_>7.2f}avg_{min_reward:_>7.2f}min__{int(time.time())}.model')
+        name = f"{MODEL_NAME}__{max_reward:_>7.2f}max_{average_reward:_>7.2f}avg_{min_reward:_>7.2f}min__{int(time.time())}"
+        agent.model.save(f'models/{name}.model')
+        with open("name.txt", 'w') as file:
+            file.write(name)
 
     # Decay epsilon
     if epsilon > MIN_EPSILON:
