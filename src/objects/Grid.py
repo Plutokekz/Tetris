@@ -31,10 +31,13 @@ class Grid:
                 if column == 0:
                     break
             else:
-                print(f'\rDelete row: {row}')
+                print(f'\rDelete row: {row} row count: {rows}')
                 self.grid = np.concatenate((np.zeros((1, 10)), np.delete(self.grid, index, axis=0)))
                 rows += 1
-        return rows ** 2 * 100
+        if rows < 4:
+            return rows ** 2 * 100
+        else:
+            return 64*100
 
     def get_image(self, figure):
         img = np.zeros((ROWS, COLUMNS, 3), dtype=np.uint8)
