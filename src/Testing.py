@@ -124,7 +124,7 @@ class DQNAgent:
         return self.model.predict(state.reshape(-1, *state.shape))[0]
 
 
-with open("name.txt", "r") as file:
+with open("src/name.txt", "r") as file:
     name = file.read()
 agent = DQNAgent(model_path=f"models/{str(name)}.model")
 print(f"Loaded model: {name}")
@@ -206,7 +206,7 @@ for episode in tqdm(range(1, EPISODES + 1), ascii=True, unit='episodes'):
         max_reward = max(ep_rewards[-AGGREGATE_STATS_EVERY:])
         name = f"{MODEL_NAME}__{max_reward:_>7.2f}max_{average_reward:_>7.2f}avg_{min_reward:_>7.2f}min__{int(time.time())}"
         agent.model.save(f'models/{name}.model')
-        with open("name.txt", 'w') as file:
+        with open("src/name.txt", 'w') as file:
             file.write(name)
 
     # Decay epsilon
