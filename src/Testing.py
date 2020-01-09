@@ -11,7 +11,12 @@ from config import *
 from Constants import *
 from objects.Grid import Grid
 import time
+import os
 
+if not os.path.isdir('src/models'):
+    os.makedirs('src/models')
+if not os.path.isdir('src/logs'):
+    os.makedirs('src/logs')
 # For stats
 ep_rewards = [-200]
 epsilon = 1  # not a constant, going to be decayed
@@ -128,10 +133,10 @@ class DQNAgent:
 #    name = file.read()
 agent = DQNAgent()
 print(f"Loaded model: {None}")
-print({"chart": "reward_avg", "axis": "episode"})
-print({"chart": "reward_min", "axis": "episode"})
-print({"chart": "reward_max", "axis": "episode"})
-print({"chart": "epsilon", "axis": "episode"})
+print({"chart": "<reward_avg>", "axis": "<episode>"})
+print({"chart": "<reward_min>", "axis": "<episode>"})
+print({"chart": "<reward_max>", "axis": "<episode>"})
+print({"chart": "<epsilon>", "axis": "<episode>"})
 
 # Iterate over episodes
 for episode in tqdm(range(1, EPISODES + 1), ascii=True, unit='episodes'):
@@ -194,10 +199,10 @@ for episode in tqdm(range(1, EPISODES + 1), ascii=True, unit='episodes'):
         agent.tensorboard.update_stats(reward_avg=average_reward, reward_min=min_reward, reward_max=max_reward,
                                        epsilon=epsilon)
 
-        print({"chart": "reward_avg", "y": average_reward, "x": episode})
-        print({"chart": "reward_max", "y": max_reward, "x": episode})
-        print({"chart": "reward_min", "y": min_reward, "x": episode})
-        print({"chart": "epsilon", "y": epsilon, "x": episode})
+        print({"chart": "<reward_avg>", "y": average_reward, "x": episode})
+        print({"chart": "<reward_max>", "y": max_reward, "x": episode})
+        print({"chart": "<reward_min>", "y": min_reward, "x": episode})
+        print({"chart": "<epsilon>", "y": epsilon, "x": episode})
 
         # Save model, but only when min reward is greater or equal a set value
         if min_reward >= MIN_REWARD:
