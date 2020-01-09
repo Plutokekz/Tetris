@@ -42,7 +42,7 @@ class DQNAgent:
         self.replay_memory = deque(maxlen=REPLAY_MEMORY_SIZE)
 
         # Custom tensorboard object
-        self.tensorboard = ModifiedTensorBoard(log_dir="logs/{}-{}".format(MODEL_NAME, int(time.time())))
+        self.tensorboard = ModifiedTensorBoard(log_dir="src/logs/{}-{}".format(MODEL_NAME, int(time.time())))
 
         # Used to count when to update target network with main network's weights
         self.target_update_counter = 0
@@ -126,7 +126,7 @@ class DQNAgent:
 
 with open("src/name.txt", "r") as file:
     name = file.read()
-agent = DQNAgent(model_path=f"models/{str(name)}.model")
+agent = DQNAgent(model_path=f"src/models/{str(name)}.model")
 print(f"Loaded model: {name}")
 
 # Iterate over episodes
@@ -183,7 +183,7 @@ for episode in tqdm(range(1, EPISODES + 1), ascii=True, unit='episodes'):
 
     if SHOW_PREVIEW and not episode % AGGREGATE_STATS_EVERY:
         img = env.render(figure)
-        img.save(f"pictures/tetris_reward_{episode_reward}_{time.time()}.png", "png")
+        img.save(f"src/pictures/tetris_reward_{episode_reward}_{time.time()}.png", "png")
         print(f"\rCurrentEpisodeReward: {episode_reward:0.2f}, MinEpReward: {min(ep_rewards):0.2f}, MaxEpReward: "
               f"{max(ep_rewards):0.2f}:")
 
@@ -199,13 +199,13 @@ for episode in tqdm(range(1, EPISODES + 1), ascii=True, unit='episodes'):
         # Save model, but only when min reward is greater or equal a set value
         if min_reward >= MIN_REWARD:
             agent.model.save(
-                f'models/{MODEL_NAME}__{max_reward:_>7.2f}max_{average_reward:_>7.2f}avg_{min_reward:_>7.2f}min__{int(time.time())}.model')
+                f'src/models/{MODEL_NAME}__{max_reward:_>7.2f}max_{average_reward:_>7.2f}avg_{min_reward:_>7.2f}min__{int(time.time())}.model')
     if episode % 1000 == 0:
         average_reward = sum(ep_rewards[-AGGREGATE_STATS_EVERY:]) / len(ep_rewards[-AGGREGATE_STATS_EVERY:])
         min_reward = min(ep_rewards[-AGGREGATE_STATS_EVERY:])
         max_reward = max(ep_rewards[-AGGREGATE_STATS_EVERY:])
         name = f"{MODEL_NAME}__{max_reward:_>7.2f}max_{average_reward:_>7.2f}avg_{min_reward:_>7.2f}min__{int(time.time())}"
-        agent.model.save(f'models/{name}.model')
+        agent.model.save(f'src/models/{name}.model')
         with open("src/name.txt", 'w') as file:
             file.write(name)
 
@@ -215,4 +215,4 @@ for episode in tqdm(range(1, EPISODES + 1), ascii=True, unit='episodes'):
         epsilon = max(MIN_EPSILON, epsilon)
 
 agent.model.save(
-    f'models/{MODEL_NAME}__{max_reward:_>7.2f}max_{average_reward:_>7.2f}avg_{min_reward:_>7.2f}min__{int(time.time())}.model')
+    f'src/models/{MODEL_NAME}__{max_reward:_>7.2f}max_{average_reward:_>7.2f}avg_{min_reward:_>7.2f}min__{int(time.time())}.model')
