@@ -1,5 +1,5 @@
 import pygame as pg
-from src.Constants import DISTANCE, COLUMNS, ROWS, colors
+from Constants import DISTANCE, COLUMNS, ROWS, colors
 import numpy as np
 
 

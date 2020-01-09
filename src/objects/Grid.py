@@ -1,10 +1,9 @@
-from src.Constants import ROWS, COLUMNS, colors
-import time
+from Constants import ROWS, COLUMNS, colors
 import numpy as np
 import random
 from PIL import Image
-from src.Constants import tetrominoes
-from src.objects.Tetromino import Tetrominoe
+from Constants import tetrominoes
+from objects.Tetromino import Tetrominoe
 
 
 class Grid:

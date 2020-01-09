@@ -1,11 +1,7 @@
-from src.objects.Grid import Grid
-from src.objects.Tetromino import Tetrominoe
-from src.Constants import *
-import numpy as np
 import numpy as np
 import keras.backend.tensorflow_backend as backend
 from keras.models import Sequential
-from keras.layers import Dense, Dropout, Conv2D, MaxPooling2D, Activation, Flatten
+from keras.layers import Dense, Dropout, Activation, Conv2D, ZeroPadding2D, Flatten, Conv1D, MaxPooling1D, MaxPooling2D
 from keras.optimizers import Adam
 from keras.callbacks import TensorBoard
 import tensorflow as tf
@@ -19,13 +15,13 @@ import cv2
 
 
 DISCOUNT = 0.99
-REPLAY_MEMORY_SIZE = 50_000  # How many last steps to keep for model training
-MIN_REPLAY_MEMORY_SIZE = 1_000  # Minimum number of steps in a memory to start training
-MINIBATCH_SIZE = 64  # How many steps (samples) to use for training
+REPLAY_MEMORY_SIZE = 100_000  # How many last steps to keep for model training
+MIN_REPLAY_MEMORY_SIZE = 50_000  # Minimum number of steps in a memory to start training
+MINIBATCH_SIZE = 256  # How many steps (samples) to use for training
 UPDATE_TARGET_EVERY = 5  # Terminal states (end of episodes)
 MODEL_NAME = '2x256'
 MIN_REWARD = -200  # For model save
-MEMORY_FRACTION = 0.20
+MEMORY_FRACTION = 0.90
 
 # Environment settings
 EPISODES = 20_000
@@ -37,48 +33,37 @@ MIN_EPSILON = 0.001
 
 #  Stats settings
 AGGREGATE_STATS_EVERY = 50  # episodes
-SHOW_PREVIEW = False
+SHOW_PREVIEW = True
 
 
-class Blob:
-    def __init__(self, size):
+class Santa:
+    def __init__(self, x, y, size):
         self.size = size
-        self.x = np.random.randint(0, size)
-        self.y = np.random.randint(0, size)
+        self.x = x
+        self.y = y
 
     def __str__(self):
-        return f"Blob ({self.x}, {self.y})"
+        return f"Santa ({self.x}, {self.y})"
 
     def __sub__(self, other):
-        return (self.x-other.x, self.y-other.y)
+        return self.x - other.x, self.y - other.y
 
     def __eq__(self, other):
         return self.x == other.x and self.y == other.y
 
     def action(self, choice):
-        '''
-        Gives us 9 total movement options. (0,1,2,3,4,5,6,7,8)
-        '''
+        """
+        Gives us 9 total movement options. (0,1,2,3,4)
+        """
         if choice == 0:
-            self.move(x=1, y=1)
-        elif choice == 1:
-            self.move(x=-1, y=-1)
-        elif choice == 2:
-            self.move(x=-1, y=1)
-        elif choice == 3:
-            self.move(x=1, y=-1)
-
-        elif choice == 4:
             self.move(x=1, y=0)
-        elif choice == 5:
+        elif choice == 1:
             self.move(x=-1, y=0)
-
-        elif choice == 6:
+        elif choice == 2:
             self.move(x=0, y=1)
-        elif choice == 7:
+        elif choice == 3:
             self.move(x=0, y=-1)
-
-        elif choice == 8:
+        elif choice == 4:
             self.move(x=0, y=0)
 
     def move(self, x=False, y=False):
@@ -106,14 +91,22 @@ class Blob:
             self.y = self.size-1
 
 
+class House:
+    pass
+
+
+class Obstacle:
+    pass
+
+
 class BlobEnv:
     SIZE = 10
     RETURN_IMAGES = True
     MOVE_PENALTY = 1
     ENEMY_PENALTY = 300
     FOOD_REWARD = 25
-    OBSERVATION_SPACE_VALUES = (SIZE, SIZE, 3)  # 4
-    ACTION_SPACE_SIZE = 9
+    OBSERVATION_SPACE_VALUES = SIZE # 4
+    ACTION_SPACE_SIZE = 5
     PLAYER_N = 1  # player key in dict
     FOOD_N = 2  # food key in dict
     ENEMY_N = 3  # enemy key in dict
@@ -123,18 +116,17 @@ class BlobEnv:
          3: (0, 0, 255)}
 
     def reset(self):
-        self.player = Blob(self.SIZE)
-        self.food = Blob(self.SIZE)
+        self.player = Santa(np.random.randint(0, self.SIZE),np.random.randint(0, self.SIZE), self.SIZE)
+        self.food = Santa(np.random.randint(0, self.SIZE),np.random.randint(0, self.SIZE), self.SIZE)
         while self.food == self.player:
-            self.food = Blob(self.SIZE)
-        self.enemy = Blob(self.SIZE)
+            self.food = Santa(np.random.randint(0, self.SIZE),np.random.randint(0, self.SIZE), self.SIZE)
+        self.enemy = Santa(np.random.randint(0, self.SIZE),np.random.randint(0, self.SIZE), self.SIZE)
         while self.enemy == self.player or self.enemy == self.food:
-            self.enemy = Blob(self.SIZE)
-
+            self.enemy = Santa(np.random.randint(0, self.SIZE),np.random.randint(0, self.SIZE), self.SIZE)
         self.episode_step = 0
 
         if self.RETURN_IMAGES:
-            observation = np.array(self.get_image())
+            observation = self.get_state()
         else:
             observation = (self.player-self.food) + (self.player-self.enemy)
         return observation
@@ -143,13 +135,8 @@ class BlobEnv:
         self.episode_step += 1
         self.player.action(action)
 
-        #### MAYBE ###
-        #enemy.move()
-        #food.move()
-        ##############
-
         if self.RETURN_IMAGES:
-            new_observation = np.array(self.get_image())
+            new_observation = self.get_state()
         else:
             new_observation = (self.player-self.food) + (self.player-self.enemy)
 
@@ -161,7 +148,7 @@ class BlobEnv:
             reward = -self.MOVE_PENALTY
 
         done = False
-        if reward == self.FOOD_REWARD or reward == -self.ENEMY_PENALTY or self.episode_step >= 200:
+        if reward == self.FOOD_REWARD or reward == -self.ENEMY_PENALTY or self.episode_step >= 50:
             done = True
 
         return new_observation, reward, done
@@ -172,7 +159,14 @@ class BlobEnv:
         cv2.imshow("image", np.array(img))  # show it!
         cv2.waitKey(1)
 
-    # FOR CNN #
+    def get_state(self):
+        env = np.zeros((self.SIZE, self.SIZE), dtype=np.uint8)
+        env[self.food.x][self.food.y] =self.FOOD_N  # sets the food location tile to green color
+        env[self.enemy.x][self.enemy.y] = self.ENEMY_N  # sets the enemy location to red
+        env[self.player.x][self.player.y] = self.PLAYER_N
+        return env/3
+
+        # FOR CNN #
     def get_image(self):
         env = np.zeros((self.SIZE, self.SIZE, 3), dtype=np.uint8)  # starts an rbg of our size
         env[self.food.x][self.food.y] = self.d[self.FOOD_N]  # sets the food location tile to green color
@@ -197,9 +191,9 @@ tf.set_random_seed(1)
 gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=MEMORY_FRACTION)
 backend.set_session(tf.Session(config=tf.ConfigProto(gpu_options=gpu_options)))
 
-# Create models folder
-if not os.path.isdir('models'):
-    os.makedirs('models')
+# Create models_test folder
+if not os.path.isdir('models_test'):
+    os.makedirs('models_test')
 
 
 # Own Tensorboard class
@@ -241,6 +235,7 @@ class DQNAgent:
 
         # Main model
         self.model = self.create_model()
+        print(self.model.summary())
 
         # Target network
         self.target_model = self.create_model()
@@ -250,27 +245,20 @@ class DQNAgent:
         self.replay_memory = deque(maxlen=REPLAY_MEMORY_SIZE)
 
         # Custom tensorboard object
-        self.tensorboard = ModifiedTensorBoard(log_dir="logs/{}-{}".format(MODEL_NAME, int(time.time())))
+        self.tensorboard = ModifiedTensorBoard(log_dir="logs_test/{}-{}".format(MODEL_NAME, int(time.time())))
 
         # Used to count when to update target network with main network's weights
         self.target_update_counter = 0
 
     def create_model(self):
         model = Sequential()
-
-        model.add(Conv2D(256, (3, 3), input_shape=env.OBSERVATION_SPACE_VALUES))  # OBSERVATION_SPACE_VALUES = (10, 10, 3) a 10x10 RGB image.
-        model.add(Activation('relu'))
-        model.add(MaxPooling2D(pool_size=(2, 2)))
+        model.add(Conv1D(filters=64, kernel_size=1, activation='relu', input_shape=(env.OBSERVATION_SPACE_VALUES, env.OBSERVATION_SPACE_VALUES)))
+        model.add(Conv1D(filters=64, kernel_size=1, activation='relu'))
         model.add(Dropout(0.2))
-
-        model.add(Conv2D(256, (3, 3)))
-        model.add(Activation('relu'))
-        model.add(MaxPooling2D(pool_size=(2, 2)))
-        model.add(Dropout(0.2))
-
-        model.add(Flatten())  # this converts our 3D feature maps to 1D feature vectors
-        model.add(Dense(64))
-
+        model.add(MaxPooling1D(pool_size=2))
+        model.add(Flatten())
+        model.add(Dense(100, activation='relu'))
+        model.add(Dense(50))
         model.add(Dense(env.ACTION_SPACE_SIZE, activation='linear'))  # ACTION_SPACE_SIZE = how many choices (9)
         model.compile(loss="mse", optimizer=Adam(lr=0.001), metrics=['accuracy'])
         return model
@@ -291,12 +279,12 @@ class DQNAgent:
         minibatch = random.sample(self.replay_memory, MINIBATCH_SIZE)
 
         # Get current states from minibatch, then query NN model for Q values
-        current_states = np.array([transition[0] for transition in minibatch])/255
+        current_states = np.array([transition[0] for transition in minibatch])
         current_qs_list = self.model.predict(current_states)
 
         # Get future states from minibatch, then query NN model for Q values
         # When using target network, query it, otherwise main network should be queried
-        new_current_states = np.array([transition[3] for transition in minibatch])/255
+        new_current_states = np.array([transition[3] for transition in minibatch])
         future_qs_list = self.target_model.predict(new_current_states)
 
         X = []
@@ -322,7 +310,7 @@ class DQNAgent:
             y.append(current_qs)
 
         # Fit on all samples as one batch, log only on terminal state
-        self.model.fit(np.array(X)/255, np.array(y), batch_size=MINIBATCH_SIZE, verbose=0, shuffle=False, callbacks=[self.tensorboard] if terminal_state else None)
+        self.model.fit(np.array(X), np.array(y), batch_size=MINIBATCH_SIZE, verbose=0, shuffle=False, callbacks=[self.tensorboard] if terminal_state else None)
 
         # Update target network counter every episode
         if terminal_state:
@@ -335,7 +323,7 @@ class DQNAgent:
 
     # Queries main network for Q values given current observation space (environment state)
     def get_qs(self, state):
-        return self.model.predict(np.array(state).reshape(-1, *state.shape)/255)[0]
+        return self.model.predict(state.reshape(-1, *state.shape))[0]
 
 
 agent = DQNAgent()
@@ -390,7 +378,7 @@ for episode in tqdm(range(1, EPISODES + 1), ascii=True, unit='episodes'):
 
         # Save model, but only when min reward is greater or equal a set value
         if min_reward >= MIN_REWARD:
-            agent.model.save(f'models/{MODEL_NAME}__{max_reward:_>7.2f}max_{average_reward:_>7.2f}avg_{min_reward:_>7.2f}min__{int(time.time())}.model')
+            agent.model.save(f'models_test/{MODEL_NAME}__{max_reward:_>7.2f}max_{average_reward:_>7.2f}avg_{min_reward:_>7.2f}min__{int(time.time())}.model')
 
     # Decay epsilon
     if epsilon > MIN_EPSILON:

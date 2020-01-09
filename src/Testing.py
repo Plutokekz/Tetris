@@ -1,18 +1,16 @@
 from collections import deque
-from src.objects.Tetromino import Tetrominoe
-from src.tools import ModifiedTensorBoard
+from objects.Tetromino import Tetrominoe
+from tools import ModifiedTensorBoard
 from keras.models import Sequential, load_model
-from keras.layers import Dense, Dropout, Conv2D, MaxPooling2D, Activation, Flatten
+from keras.layers import Dense, Dropout, Activation
 from keras.optimizers import Adam
-import numpy as np
 from tqdm import tqdm
 import random
 import tensorflow as tf
-from src.config import *
-from src.Constants import *
-from src.objects.Grid import Grid
+from config import *
+from Constants import *
+from objects.Grid import Grid
 import time
-import cv2
 
 # For stats
 ep_rewards = [-200]
