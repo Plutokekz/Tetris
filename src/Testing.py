@@ -21,7 +21,7 @@ env = Grid()
 # For more repetitive results
 random.seed(1)
 np.random.seed(1)
-tf.set_random_seed(1)
+tf.compat.v1.set_random_seed(1)
 
 
 # Agent class
@@ -124,10 +124,14 @@ class DQNAgent:
         return self.model.predict(state.reshape(-1, *state.shape))[0]
 
 
-with open("src/name.txt", "r") as file:
-    name = file.read()
-agent = DQNAgent(model_path=f"src/models/{str(name)}.model")
-print(f"Loaded model: {name}")
+#with open("src/name.txt", "r") as file:
+#    name = file.read()
+agent = DQNAgent()
+print(f"Loaded model: {None}")
+print({"chart": "reward_avg", "axis": "episode"})
+print({"chart": "reward_min", "axis": "episode"})
+print({"chart": "reward_max", "axis": "episode"})
+print({"chart": "epsilon", "axis": "episode"})
 
 # Iterate over episodes
 for episode in tqdm(range(1, EPISODES + 1), ascii=True, unit='episodes'):
@@ -181,12 +185,6 @@ for episode in tqdm(range(1, EPISODES + 1), ascii=True, unit='episodes'):
         current_state = new_state
         step += 1
 
-    if SHOW_PREVIEW and not episode % AGGREGATE_STATS_EVERY:
-        img = env.render(figure)
-        img.save(f"src/pictures/tetris_reward_{episode_reward}_{time.time()}.png", "png")
-        print(f"\rCurrentEpisodeReward: {episode_reward:0.2f}, MinEpReward: {min(ep_rewards):0.2f}, MaxEpReward: "
-              f"{max(ep_rewards):0.2f}:")
-
     # Append episode reward to a list and log stats (every given number of episodes)
     ep_rewards.append(episode_reward)
     if not episode % AGGREGATE_STATS_EVERY or episode == 1:
@@ -196,10 +194,22 @@ for episode in tqdm(range(1, EPISODES + 1), ascii=True, unit='episodes'):
         agent.tensorboard.update_stats(reward_avg=average_reward, reward_min=min_reward, reward_max=max_reward,
                                        epsilon=epsilon)
 
+        print({"chart": "reward_avg", "y": average_reward, "x": episode})
+        print({"chart": "reward_max", "y": max_reward, "x": episode})
+        print({"chart": "reward_min", "y": min_reward, "x": episode})
+        print({"chart": "epsilon", "y": epsilon, "x": episode})
+
         # Save model, but only when min reward is greater or equal a set value
         if min_reward >= MIN_REWARD:
             agent.model.save(
                 f'src/models/{MODEL_NAME}__{max_reward:_>7.2f}max_{average_reward:_>7.2f}avg_{min_reward:_>7.2f}min__{int(time.time())}.model')
+
+    if SHOW_PREVIEW and not episode % AGGREGATE_STATS_EVERY:
+        img = env.render(figure)
+        img.save(f"src/pictures/tetris_reward_{episode_reward}_{time.time()}.png", "png")
+        print(f"\rCurrentEpisodeReward: {episode_reward:0.2f}, MinEpReward: {min(ep_rewards):0.2f}, MaxEpReward: "
+              f"{max(ep_rewards):0.2f}:")
+
     if episode % 1000 == 0:
         average_reward = sum(ep_rewards[-AGGREGATE_STATS_EVERY:]) / len(ep_rewards[-AGGREGATE_STATS_EVERY:])
         min_reward = min(ep_rewards[-AGGREGATE_STATS_EVERY:])
